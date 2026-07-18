@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Algo que no les hemos contado</title>
-<meta property="og:title" content="Hay algo que no les hemos contado…">
+<title>Hay algo que aún no saben</title>
+<meta property="og:title" content="Hay algo que aún no saben…">
 <meta property="og:description" content="Abran esto cuando estén los dos. Necesitan el código.">
 <meta name="description" content="Abran esto cuando estén los dos. Necesitan el código.">
 <meta name="twitter:card" content="summary">
@@ -50,6 +50,18 @@
     font-family:inherit; font-size:15px; font-weight:600; cursor:pointer;
   }
   #enter:hover{ filter:brightness(1.08); }
+  .riddle{
+    margin:0 auto 24px; max-width:30ch;
+    font-family:"Fraunces", Georgia, serif; font-style:italic; font-size:clamp(17px,4.6vw,20px);
+    line-height:1.55; color:var(--bone);
+  }
+  .hintbtn{
+    margin:18px auto 0; display:block; background:none; border:0; padding:6px 4px;
+    font-family:inherit; font-size:13px; cursor:pointer; color:rgba(239,231,216,.45);
+    text-decoration:underline; text-underline-offset:4px;
+  }
+  .hintbtn:hover{ color:var(--gold); }
+  .hint2{ margin:14px auto 0; max-width:32ch; font-size:14px; line-height:1.55; color:var(--gold); }
   .err{ margin:16px 0 0; min-height:20px; font-size:13.5px; color:var(--blush); opacity:0; transition:opacity .25s; }
   .err.show{ opacity:1; }
   .shake{ animation:shake .4s; }
@@ -137,19 +149,27 @@
       <rect x="4" y="10" width="16" height="11" rx="2.5"/>
       <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
     </svg>
-    <p class="eyebrow">Algo que no les hemos contado</p>
+    <p class="eyebrow">Hay algo que a&uacute;n no saben</p>
     <h1>Esto no es<br>para cualquiera&hellip;</h1>
-    <p class="gate-copy">Para proteger nuestra privacidad, esta p&aacute;gina est&aacute; cerrada con clave. Escriban el c&oacute;digo que les dimos.</p>
+    <p class="gate-copy" id="gateCopy">Por razones de seguridad, escriban el c&oacute;digo que les dimos.</p>
+    <p class="riddle" id="riddle" hidden></p>
     <div class="codebox">
       <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
              spellcheck="false" placeholder="Su c&oacute;digo" aria-label="C&oacute;digo">
       <button id="enter" type="button">Entrar</button>
     </div>
     <p class="err" id="err" role="status"></p>
+    <button class="hintbtn" id="hintBtn" type="button" hidden>&iquest;Quieren una pista?</button>
+    <p class="hint2" id="hint2" hidden></p>
+    <noscript>
+      <p class="err show" style="opacity:1">
+        Para que funcione, abran esta p&aacute;gina en su navegador (Chrome o Safari).
+      </p>
+    </noscript>
   </section>
 
   <section id="stage" hidden>
-    <p class="eyebrow">Algo que no les hemos contado</p>
+    <p class="eyebrow">Hay algo que a&uacute;n no saben</p>
     <h1>Debajo de esta capa<br>hay una noticia&hellip;</h1>
     <p class="hint" id="hint">Rasquen con el dedo para descubrirla</p>
 
@@ -200,6 +220,25 @@
     'luna': '\u00A1Van a ser abuelos!',
     'sol':  '\u00A1Van a ser t\u00EDos!'
   };
+
+  /* =======================================================================
+     ACERTIJOS  \u2014  the answer to each riddle IS the code above.
+       index.html?p=1  \u2192  acertijo de "luna"  (abuelos)
+       index.html?p=2  \u2192  acertijo de "sol"   (t\u00EDos)
+     Sin ?p, la p\u00E1gina simplemente pide el c\u00F3digo.
+     ======================================================================= */
+  var PUZZLES = {
+    '1': {
+      riddle: 'No tengo luz propia, pero alumbro la noche. Cambio de forma cada semana ' +
+              'y muevo el mar sin tocarlo. \u00BFQui\u00E9n soy?',
+      hint:   'Sale de noche, y tiene fases: nueva, creciente, llena\u2026'
+    },
+    '2': {
+      riddle: 'Llego cada ma\u00F1ana sin tocar la puerta, me escondo en el mar por la tarde, ' +
+              'y sin m\u00ED no crecer\u00EDa nada. \u00BFQui\u00E9n soy?',
+      hint:   'Los girasoles lo siguen todo el d\u00EDa.'
+    }
+  };
   /* ===================================================================== */
 
   var gate = document.getElementById('gate');
@@ -224,12 +263,47 @@
   ];
 
   /* ---------------- gate ---------------- */
-  function norm(v){ return (v || '').toLowerCase().replace(/[\s\-_.]/g, ''); }
+  function norm(v){
+    var s = (v || '').toLowerCase();
+    if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');  // quita acentos
+    return s.replace(/[^a-z0-9]/g, '');                                       // quita espacios y puntos
+  }
+
+  // Accepts "luna", "La Luna", "la  luna.", "el sol", etc.
+  function lookup(v){
+    var k = norm(v);
+    if (CODES[k]) return CODES[k];
+    var bare = k.replace(/^(el|la|los|las|un|una)/, '');
+    return CODES[bare] || null;
+  }
+
+  var gateCopy = document.getElementById('gateCopy');
+  var riddleEl = document.getElementById('riddle');
+  var hintBtn = document.getElementById('hintBtn');
+  var hint2 = document.getElementById('hint2');
+  var puzzle = PUZZLES[(location.search.match(/[?&]p=([^&]+)/) || [])[1]];
+  var misses = 0;
+
+  if (puzzle){
+    gateCopy.textContent = 'Por razones de seguridad, resuelvan esto para entrar:';
+    riddleEl.textContent = puzzle.riddle;
+    riddleEl.hidden = false;
+    input.placeholder = 'La respuesta';
+    hintBtn.addEventListener('click', function(){
+      hint2.textContent = puzzle.hint;
+      hint2.hidden = false;
+      hintBtn.hidden = true;
+    });
+  }
 
   function unlock(){
-    var msg = CODES[norm(input.value)];
+    var msg = lookup(input.value);
     if (!msg){
-      err.textContent = 'Ese c\u00F3digo no es. Revisen el mensaje que les enviamos.';
+      misses++;
+      if (puzzle && misses >= 2) hintBtn.hidden = false;
+      err.textContent = puzzle
+        ? 'Esa no es\u2026 pi\u00E9nsenlo otra vez.'
+        : 'Ese c\u00F3digo no es. Revisen el mensaje que les enviamos.';
       err.classList.add('show');
       gate.classList.remove('shake');
       void gate.offsetWidth;
